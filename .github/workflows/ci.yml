@@ -28,5 +28,5 @@ jobs:
       - name: Run tests with coverage
         run: pytest -v --cov=rag --cov-report=term-missing
 
-      - name: Verify ingest script is importable
-        run: python -c "from rag.pipeline import RAGPipeline; print('RAGPipeline OK')"
+      - name: Verify core imports
+        run: python -c "from rag.pipeline import RAGPipeline; from rag.index import VectorIndex; print('All imports OK')"
