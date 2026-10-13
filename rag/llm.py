@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
 _RETRY_BACKOFF = 2.0  # seconds
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 def generate_answer(question: str, contexts: list[dict]) -> str:
@@ -32,29 +33,48 @@ def generate_answer(question: str, contexts: list[dict]) -> str:
         "Content-Type": "application/json",
     }
     url = f"{LLM_BASE_URL}/chat/completions"
+    last_error: Exception | None = None
 
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=60)
-            if response.status_code == 429:
+
+            if response.status_code in _RETRYABLE_STATUS:
                 wait = _RETRY_BACKOFF * attempt
-                logger.warning("Rate limited by LLM API. Retrying in %.1fs…", wait)
+                logger.warning(
+                    "LLM API returned %d (attempt %d/%d). Retrying in %.1fs…",
+                    response.status_code, attempt, _MAX_RETRIES, wait,
+                )
                 time.sleep(wait)
+                last_error = RuntimeError(
+                    f"LLM API returned HTTP {response.status_code}: {response.text[:200]}"
+                )
                 continue
+
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"].strip()
-        except requests.exceptions.ConnectionError as exc:
-            raise RuntimeError(
+
+        except requests.exceptions.ConnectionError:
+            wait = _RETRY_BACKOFF * attempt
+            logger.warning("Connection error (attempt %d/%d). Retrying in %.1fs…",
+                           attempt, _MAX_RETRIES, wait)
+            time.sleep(wait)
+            last_error = RuntimeError(
                 f"Could not connect to LLM API at {LLM_BASE_URL}. "
                 "Check LLM_BASE_URL in your .env file."
-            ) from exc
-        except requests.exceptions.Timeout as exc:
-            raise RuntimeError("LLM API request timed out after 60 seconds.") from exc
+            )
+        except requests.exceptions.Timeout:
+            wait = _RETRY_BACKOFF * attempt
+            logger.warning("Request timed out (attempt %d/%d). Retrying in %.1fs…",
+                           attempt, _MAX_RETRIES, wait)
+            time.sleep(wait)
+            last_error = RuntimeError("LLM API request timed out after 60 seconds.")
         except requests.exceptions.HTTPError as exc:
+            # Non-retryable HTTP error (4xx except 429)
             status = exc.response.status_code
             body = exc.response.text[:300]
-            raise RuntimeError(
-                f"LLM API returned HTTP {status}: {body}"
-            ) from exc
+            raise RuntimeError(f"LLM API returned HTTP {status}: {body}") from exc
 
-    raise RuntimeError(f"LLM API rate limit exceeded after {_MAX_RETRIES} retries.")
+    raise last_error or RuntimeError(
+        f"LLM API failed after {_MAX_RETRIES} attempts."
+    )
