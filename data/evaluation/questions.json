@@ -1,0 +1,25 @@
+[
+  {
+    "question": "What is the maximum daily ATM withdrawal limit for a standard debit card?",
+    "expected_source": "debit_card_policy.md",
+    "expected_keywords": [
+      "INR 50,000",
+      "daily"
+    ]
+  },
+  {
+    "question": "What is the minimum quarterly average balance for the Basic Savings Account?",
+    "expected_source": "savings_account_policy.md",
+    "expected_keywords": [
+      "INR 5,000",
+      "quarterly"
+    ]
+  },
+  {
+    "question": "What should analysts do with high-risk fraud cases?",
+    "expected_source": "fraud_policy.md",
+    "expected_keywords": [
+      "escalated"
+    ]
+  }
+]
