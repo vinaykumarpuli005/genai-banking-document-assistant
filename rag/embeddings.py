@@ -1,10 +1,12 @@
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
+
 class Embedder:
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str) -> None:
         self.model = SentenceTransformer(model_name)
 
-    def encode(self, texts):
+    def encode(self, texts: list[str]) -> np.ndarray:
         return self.model.encode(
             texts,
             normalize_embeddings=True,
