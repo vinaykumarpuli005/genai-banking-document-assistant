@@ -1,4 +1,5 @@
 import streamlit as st
+
 from rag.pipeline import RAGPipeline
 
 st.set_page_config(
