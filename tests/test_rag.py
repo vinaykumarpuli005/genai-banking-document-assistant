@@ -2,12 +2,10 @@
 Unit tests for the RAG pipeline components.
 Run with: pytest -v
 """
-import numpy as np
 import pytest
 
 from rag.document_loader import chunk_text, load_documents
 from rag.prompts import SYSTEM_PROMPT, build_user_prompt
-
 
 # ── chunk_text ────────────────────────────────────────────────────────────────
 
