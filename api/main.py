@@ -10,16 +10,23 @@ from rag.pipeline import RAGPipeline
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-pipeline = RAGPipeline()
+# Initialised inside lifespan so model-download errors are caught and logged cleanly.
+pipeline: RAGPipeline | None = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global pipeline
     try:
+        pipeline = RAGPipeline()
         pipeline.load_index()
-        logger.info("FAISS index loaded successfully.")
+        logger.info("RAGPipeline ready — FAISS index loaded.")
     except FileNotFoundError:
-        logger.warning("Index not found. Run: python -m scripts.ingest")
+        logger.warning("FAISS index missing. Run: python -m scripts.ingest")
+    except Exception:
+        logger.exception("Failed to initialise RAGPipeline.")
     yield
+
 
 app = FastAPI(
     title="GenAI Banking Document Assistant",
@@ -37,7 +44,11 @@ app.add_middleware(
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=2000, examples=["What is the daily ATM withdrawal limit?"])
+    question: str = Field(
+        min_length=3,
+        max_length=2000,
+        examples=["What is the daily ATM withdrawal limit?"],
+    )
     top_k: int = Field(default=4, ge=1, le=10)
 
 
@@ -58,19 +69,19 @@ class AskResponse(BaseModel):
 def health():
     return {
         "status": "ok",
-        "index_loaded": pipeline.index.is_loaded,
+        "index_loaded": pipeline is not None and pipeline.index.is_loaded,
     }
 
 
 @app.post("/ask", response_model=AskResponse, tags=["RAG"])
 def ask(request: AskRequest):
-    if not pipeline.index.is_loaded:
+    if pipeline is None or not pipeline.index.is_loaded:
         raise HTTPException(
             status_code=503,
-            detail="Index not loaded. Run: python -m scripts.ingest",
+            detail="Service not ready. Run: python -m scripts.ingest then restart.",
         )
     try:
-        logger.info("Question received: %s", request.question)
+        logger.info("Question: %s", request.question)
         result = pipeline.ask(request.question, request.top_k)
         return AskResponse(
             question=request.question,
@@ -80,5 +91,5 @@ def ask(request: AskRequest):
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("Unexpected error during /ask")
+        logger.exception("Unexpected error in /ask")
         raise HTTPException(status_code=500, detail="Internal server error.") from exc
