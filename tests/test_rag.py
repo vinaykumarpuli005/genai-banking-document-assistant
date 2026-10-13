@@ -26,7 +26,6 @@ def test_chunk_text_overlap_carries_words():
     words = [str(i) for i in range(200)]
     text = " ".join(words)
     chunks = chunk_text(text, chunk_size=50, overlap=10)
-    # last words of chunk N must appear at start of chunk N+1
     last_words = chunks[0].split()[-10:]
     first_words_next = chunks[1].split()[:10]
     assert last_words == first_words_next
@@ -46,6 +45,12 @@ def test_chunk_text_single_chunk_when_short():
     chunks = chunk_text(text, chunk_size=100, overlap=10)
     assert len(chunks) == 1
     assert chunks[0] == "short text"
+
+
+def test_chunk_text_no_empty_chunks():
+    text = " ".join(["word"] * 300)
+    chunks = chunk_text(text, chunk_size=50, overlap=10)
+    assert all(c.strip() for c in chunks)
 
 
 # ── build_user_prompt ─────────────────────────────────────────────────────────
@@ -77,6 +82,14 @@ def test_prompt_includes_score():
     assert "0.87" in prompt
 
 
+def test_prompt_includes_context_text():
+    prompt = build_user_prompt(
+        "limit?",
+        [{"source": "doc.md", "chunk": 1, "score": 0.9, "text": "Daily limit is INR 50000."}],
+    )
+    assert "Daily limit is INR 50000." in prompt
+
+
 # ── SYSTEM_PROMPT ─────────────────────────────────────────────────────────────
 
 def test_system_prompt_contains_anti_hallucination_rule():
@@ -91,10 +104,13 @@ def test_system_prompt_contains_prompt_injection_protection():
     assert "injection" in SYSTEM_PROMPT.lower() or "instructions" in SYSTEM_PROMPT.lower()
 
 
+def test_system_prompt_not_empty():
+    assert len(SYSTEM_PROMPT.strip()) > 100
+
+
 # ── load_documents ────────────────────────────────────────────────────────────
 
 def test_load_documents_raises_on_missing_dir(tmp_path):
-    from rag.document_loader import load_documents
     with pytest.raises(FileNotFoundError):
         load_documents(tmp_path / "nonexistent")
 
@@ -118,3 +134,41 @@ def test_load_documents_skips_empty_files(tmp_path):
     (tmp_path / "empty.md").write_text("   ", encoding="utf-8")
     docs = load_documents(tmp_path)
     assert len(docs) == 0
+
+
+def test_load_documents_reads_txt_file(tmp_path):
+    (tmp_path / "note.txt").write_text("Some plain text.", encoding="utf-8")
+    docs = load_documents(tmp_path)
+    assert len(docs) == 1
+    assert docs[0]["text"] == "Some plain text."
+
+
+def test_load_documents_returns_source_filename(tmp_path):
+    (tmp_path / "fraud_policy.md").write_text("Fraud rules here.", encoding="utf-8")
+    docs = load_documents(tmp_path)
+    assert docs[0]["source"] == "fraud_policy.md"
+
+
+# ── rag package imports ───────────────────────────────────────────────────────
+
+def test_rag_pipeline_importable():
+    from rag.pipeline import RAGPipeline  # noqa: F401
+    assert RAGPipeline is not None
+
+
+def test_rag_index_importable():
+    from rag.index import VectorIndex  # noqa: F401
+    assert VectorIndex is not None
+
+
+def test_vector_index_is_loaded_false_by_default(tmp_path):
+    from rag.index import VectorIndex
+    idx = VectorIndex(tmp_path / "test.index", tmp_path / "meta.json")
+    assert idx.is_loaded is False
+
+
+def test_vector_index_load_raises_when_missing(tmp_path):
+    from rag.index import VectorIndex
+    idx = VectorIndex(tmp_path / "nofile.index", tmp_path / "nofile.json")
+    with pytest.raises(FileNotFoundError):
+        idx.load()
