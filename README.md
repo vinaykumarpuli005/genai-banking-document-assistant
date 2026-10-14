@@ -224,4 +224,4 @@ Ready to explain:
 ## 👤 Author
 
 **Vinay Kumar Puli** — Aspiring Data Analyst / AI Engineer  
-[LinkedIn](https://www.linkedin.com/in/vinay-kumarpuli005) · [GitHub](https://github.com/vinaykumarpuli005)
+[LinkedIn](https://www.linkedin.com/in/vinay-kumar-puli005) · [GitHub](https://github.com/vinaykumarpuli005)
